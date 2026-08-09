@@ -1,0 +1,120 @@
+#Import Libraries
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Input, Dense , Dropout, BatchNormalization, Flatten
+from tensorflow.keras.datasets import mnist
+
+#Load MNIST Dataset
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+print("Training Images :", x_train.shape)
+print("Testing Images :", x_test.shape)
+
+#Display Sample Image
+plt.imshow(x_train[0], cmap='gray')
+plt.title("Sample Image\nLabel = " + str(y_train[0]))
+plt.axis('off')
+plt.show()
+
+#Normalize Images
+x_train = x_train/255.0
+x_test = x_test/255.0
+
+#Build Deep Learning Model
+model = Sequential([
+    Input(shape=(28,28)),
+
+    Flatten(),
+
+    Dense (256, activation = 'relu'),
+    BatchNormalization(),
+    Dropout(0.3),
+
+    Dense (128, activation = 'relu'),
+    BatchNormalization(),
+    Dropout(0.3),
+
+    Dense (64, activation = 'relu'),
+
+    Dense (10, activation = 'softmax'),
+])
+
+#Compile Model
+model.compile(
+    optimizer = 'adam',
+    loss = 'sparse_categorical_crossentropy',
+    metrics = ['accuracy']
+)
+
+#Model Summary
+print("\nModel Summary")
+model.summary()
+
+#Train Model
+history = model.fit(
+    x_train,
+    y_train,
+    epochs=10,
+    batch_size = 32,
+    validation_split=0.2
+)
+
+#EvaluatE Model
+loss, accuracy = model.evaluate(x_test, y_test)
+
+print("\nTest Loss :", loss)
+print("Test Accuracy :", accuracy)
+
+#Predict First 5 Images
+predictions = model.predict(x_test[:5])
+
+print("\nPrediction Results")
+
+plt.figure(figsize=(12,3))
+
+for i in range(5):
+
+  predicted = np.argmax(predictions[i])
+
+  print("------------------------------")
+  print("Image, i+1")
+  print("Actual Label :", y_test[i])
+  print("Predicted Label :", predicted)
+
+  plt.subplot(1,5,i+1)
+  plt.imshow(x_test[i],cmap='gray')
+  plt.title(f'p:{predicted}\nA:{y_test[i]}')
+  plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+#Accuracy Graph
+
+plt.figure (figsize=(8,5))
+
+plt.plot(history.history['accuracy'],label = 'Training Accuracy')
+plt.plot(history.history['val_accuracy'],label = 'Validation Accuracy')
+
+plt.title("Training vs Validation Accurcay")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+
+plt.show
+
+#Loss Graph
+plt.figure (figsize=(8,5))
+
+plt.plot(history.history['loss'],label = 'Training loss')
+plt.plot(history.history['val_loss'],label = 'Validation loss')
+
+plt.title("Training vs Validation loss")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+
+plt.show
