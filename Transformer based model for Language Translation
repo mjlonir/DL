@@ -1,0 +1,213 @@
+#Implement a transformer-based model for language translation.(Pract7)
+import tensorflow as tf
+from tensorflow.keras import layers
+import numpy as np
+
+# 1. Dataset
+
+english = [
+    "hello",
+    "good morning",
+    "thank you",
+    "how are you",
+    "i am a student",
+    "good night"
+]
+
+french = [
+    "bonjour",
+    "bonjour",
+    "merci",
+    "comment allez vous",
+    "je suis etudiant",
+    "bonne nuit"
+]
+
+# Add start and end words
+french = [
+    "start " + x + " end"
+    for x in french
+]
+
+# 2. Tokenization
+
+eng = layers.TextVectorization(
+    output_sequence_length=6
+)
+
+fra = layers.TextVectorization(
+    output_sequence_length=7
+)
+
+eng.adapt(english)
+fra.adapt(french)
+
+X = eng(english)
+Y = fra(french)
+
+# Decoder input and target
+decoder_input = Y[:, :-1]
+decoder_target = Y[:, 1:]
+
+eng_vocab = len(eng.get_vocabulary())
+fra_vocab = len(fra.get_vocabulary())
+
+# Ignore padding (0) during training
+sample_weight = tf.cast(
+    decoder_target != 0,
+    tf.float32
+)
+
+# 3. Encoder
+
+encoder_input = layers.Input(shape=(6,))
+
+x = layers.Embedding(
+    eng_vocab,
+    32,
+    mask_zero=True
+)(encoder_input)
+
+attention = layers.MultiHeadAttention(
+    num_heads=2,
+    key_dim=16
+)(x, x)
+
+x = layers.Add()([x, attention])
+x = layers.LayerNormalization()(x)
+
+encoder_output = layers.Dense(
+    32,
+    activation="relu"
+)(x)
+
+# 4. Decoder
+
+decoder_input_layer = layers.Input(shape=(6,))
+
+d = layers.Embedding(
+    fra_vocab,
+    32,
+    mask_zero=True
+)(decoder_input_layer)
+
+# Self attention
+self_attention = layers.MultiHeadAttention(
+    num_heads=2,
+    key_dim=16
+)(
+    d, d,
+    use_causal_mask=True
+)
+
+d = layers.Add()([d, self_attention])
+d = layers.LayerNormalization()(d)
+
+# Cross attention
+cross_attention = layers.MultiHeadAttention(
+    num_heads=2,
+    key_dim=16
+)(
+    d,
+    encoder_output
+)
+
+d = layers.Add()([d, cross_attention])
+d = layers.LayerNormalization()(d)
+
+# Feed forward
+d = layers.Dense(
+    64,
+    activation="relu"
+)(d)
+
+d = layers.Dense(32)(d)
+
+# Output
+output = layers.Dense(
+    fra_vocab,
+    activation="softmax"
+)(d)
+
+# 5. Transformer Model
+
+model = tf.keras.Model(
+    [encoder_input, decoder_input_layer],
+    output
+)
+
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+# 6. Train
+
+model.fit(
+    [X, decoder_input],
+    decoder_target,
+    sample_weight=sample_weight,
+    epochs=500,
+    verbose=0
+)
+
+print("Model trained successfully!")
+
+# 7. Translation Function
+
+def translate(sentence):
+
+    encoder_data = eng([sentence])
+
+    # Start translation
+    result = ["start"]
+
+    for i in range(6):
+
+        # Convert current words to numbers
+        decoder_data = fra(
+            [" ".join(result)]
+        )
+
+        # Make sure size is exactly 6
+        decoder_data = decoder_data[:, :6]
+
+        prediction = model.predict(
+            [encoder_data, decoder_data],
+            verbose=0
+        )
+
+        # Last predicted word
+        word_id = np.argmax(
+            prediction[0, len(result) - 1]
+        )
+
+        word = fra.get_vocabulary()[word_id]
+
+        # Stop
+        if word == "end":
+            break
+
+        # Ignore padding / unknown
+        if word not in ["", "[UNK]", "start"]:
+            result.append(word)
+
+    return " ".join(result[1:])
+
+# 8. Test
+
+test_sentences = [
+    "hello",
+    "good morning",
+    "thank you",
+    "how are you",
+    "i am a student",
+    "good night"
+]
+
+for sentence in test_sentences:
+
+    print("English :", sentence)
+    print("French  :", translate(sentence))
+    print()
